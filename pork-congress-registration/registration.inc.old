@@ -1,0 +1,958 @@
+<?php
+	require_once "/home/programming/modules/vw_sanitylib.inc";
+	include_once ("state.inc");
+	
+	// Define steps to the registration process (different displays)
+	define("STEP_1", "Number Attending");
+	define("STEP_2", "Name Badge Entries");
+	define("STEP_3", "Confirm Names");
+	define("STEP_4", "Fill Out Registration Form");
+	
+	// Define the promo code and the event ID for this year's gathering
+	define("EVENT_ID", esc_attr( get_option('pcr_event_id') ));
+	define("PROMO_CODE", esc_attr( get_option('pcr_promo_code') ));
+	
+	$price="10.00";
+	$hideform=0;
+	$btnAttendees="Continue";
+	$btnSubmit="Submit";
+	$error=array();
+	$success=array();
+	$new_members = array();
+	$event_register_list = array();
+	
+	if ( $_POST["registration_step"] == STEP_1 )
+	{
+		// validate form if submitted
+		if ( "" == trim($_POST['attendees']) )
+		{
+			$error[]="Please select a number of attendees from the drop down.";
+		}
+		else
+		{
+			$attendees=$_POST['attendees'];
+			if ($attendees<1 or $attendees>50)
+			{
+				$error[]="Please select a number of attendees from the drop down.";
+			}
+		}
+		
+		if ( count($error) == 0 )
+			$registration_step = STEP_2;
+		else
+			$registration_step = $_POST["registration_step"];
+	}
+	
+	
+	if ( $_POST["registration_step"] == STEP_2 )
+	{
+		//validate form if submitted
+		if (vw_is_alphanumeric_spaces($_POST["first_name"], false)==false)
+		{
+			$error[]="Please enter your first name using letters only.";
+		}
+		if (vw_is_alphanumeric_spaces($_POST["last_name"], false)==false)
+		{
+			$error[]="Please enter your last name using letters only.";
+		}
+		
+		if ( isset($_POST['attendeefname']) )
+			$attendeefname = $_POST['attendeefname'];
+		else
+			$attendeefname = array();
+		foreach($attendeefname as $k=>$v)
+		{
+			if (vw_is_alphanumeric_spaces($v,false)==false)
+			{
+				$error[]="Please enter a first name for attendee #".(1 + $k);
+			}
+		}
+		
+		if ( isset($_POST['attendeefname']) )
+			$attendeelname = $_POST['attendeelname'];
+		else
+			$attendeelname = array();
+		foreach($attendeelname as $k=>$v)
+		{
+			if (vw_is_alphanumeric_spaces($v,false)==false)
+			{
+				$error[]="Please enter a last name for attendee #".(1 + $k);
+			}
+		}
+		
+		$warning = array();
+				
+		if ( count($error) == 0 )
+			$registration_step = STEP_3;
+		else
+			$registration_step = $_POST["registration_step"];
+		
+		$error = array_merge($error, $warning);
+	}
+	
+	
+	if ( $_POST["registration_step"] == STEP_3 )
+	{
+		// validate form if submitted
+		if ( "" == trim($_POST["matching_personid"]) )
+			$error[] = "Please select one of the membership options for your name.";
+		
+		if ( isset($_POST["attendeefname"]) )
+		{
+			foreach ($_POST["attendeefname"] as $key => $ignore)
+			{
+				if ( isset($_POST["matching_other_personid"][$key]) )
+				{
+					if ( "" == trim($_POST["matching_other_personid"][$key]) )
+						$error[] = "Please select one of the membership options for '".$_POST["attendeefname"][$key]." ".$_POST["attendeelname"][$key]."'.";
+				}
+				else
+				{
+					$error[] = "Please select one of the membership options for '".$_POST["attendeefname"][$key]." ".$_POST["attendeelname"][$key]."'.";
+				}
+			}
+		}
+		
+		if ( count($error) == 0 )
+			$registration_step = STEP_4;
+		else
+			$registration_step = $_POST["registration_step"];
+	}
+	
+	
+	if ( $_POST["registration_step"] == STEP_4 )
+	{
+		//validate form if submitted
+		/*
+		$organization=$_POST['organization'];
+		if (vw_is_alphanumeric_punct($organization,true)==false)
+		{
+			$error[]="Please enter your organization name.";
+		}
+		*/
+		
+		$attendee_type = $_POST["attendee_type"];
+		if ( $attendee_type != 'Attendee' && $attendee_type != 'SIP/Partner' )
+		{
+			$error[] = "Please select a registration type from the drop down list.";
+		}
+		
+		$fullname=$_POST['fullname'];
+		if (vw_is_alphanumeric_spaces($fullname,false)==false)
+		{
+			$error[]="Please enter your name using letters only.";
+		}
+		
+		$title=$_POST['title'];
+		if (vw_is_alphanumeric_spaces($title,true)==false)
+		{
+			$error[]="Please enter your title using letters only.";
+		}
+		
+		$company=$_POST['company'];
+		if (vw_is_alphanumeric_spaces($company,true)==false)
+		{
+			$error[]="Please enter your company name using letters only.";
+		}
+		
+		$address=$_POST['address'];
+		if (vw_is_valid_street($address,false)==false)
+		{
+			$error[]="Please enter your address.";
+		}
+		
+		$city=$_POST['city'];
+		if (vw_is_alphanumeric_spaces($city,false)==false)
+		{
+			$error[]="Please enter your city.";
+		}
+		
+		$state=$_POST['state'];
+		if (vw_is_alpha($state,false)==false)
+		{
+			$error[]="Please enter your state.";
+		}
+		
+		$zip=$_POST['zip'];
+		if (vw_is_us_can_zip($zip,false)==false)
+		{
+			$error[]="Please enter your zip.";
+		}		
+		
+		$phone=$_POST['phone'];
+		if (vw_is_strict_us_phone($phone,false)==false)
+		{
+			$error[]="Please enter your phone number.";
+		}
+		
+		$fax=$_POST['fax'];
+		if (vw_is_strict_us_phone($fax,true)==false)
+		{
+			$error[]="Please enter your fax number.";
+		}
+		
+		$email=$_POST['email'];
+		if (vw_is_valid_email($email,false)==false)
+		{
+			$error[]="Please enter your email.";
+		}
+		
+		// A *valid* promotional code allows the CC processing to be skipped
+		$skip_cc = false;
+		$cc_fields_required = true;
+		$promo_code = $_POST["promo_code"];
+		if ( trim($promo_code) != "" )
+		{
+			// Only registrants selecting attendee type #3 (SIP/Partner) are *allowed* to use the promo code
+			if ( $attendee_type == 'SIP/Partner' )
+			{
+				if ( trim($promo_code) === PROMO_CODE )
+				{
+					$cc_fields_required = false;
+				
+					// If there is more than 1 guest, then show the cc fields.  Only the first one is free.
+					if(is_array($attendeefname) && count($attendeefname) > 1)
+					{
+						$cc_fields_required = true;
+					}
+				}
+				else
+				{
+					$error[] = "You did not enter a valid promotional payment code.";
+				}
+			}
+			else
+			{
+				$error[] = "You must select type SIP/Partner in order to use a promo code.";
+				$skip_cc = true;
+			}
+		}
+		
+		if ( false == $skip_cc )
+		{
+			if ( $cc_fields_required == true )
+			{
+				$cctype=$_POST['cctype'];
+				if ($cctype!="Visa" and $cctype!="MasterCard")
+				{
+					$error[]="Please select your credit card type from the list.";
+				}
+				
+				$ccnumber=$_POST['ccnumber'];
+				if (vw_is_alphanumeric_punct($ccnumber,false)==false)
+				{
+					$error[]="Please enter your credit card number.";
+				}
+				
+				$ccexpiration=$_POST['ccexpiration'];
+				if (vw_is_semidate($ccexpiration,false)==false)
+				{
+					$error[]="Please enter your expiration date in the format mm/yyyy.";
+				}
+				
+				$ccname=$_POST['ccname'];
+				if (vw_is_alphanumeric_spaces($ccname,false)==false or is_numeric($ccname))
+				{
+					$error[]="Please enter the name on your credit card.";
+				}
+				
+				$ccv=$_POST['ccv'];
+				if (vw_is_numeric($ccv,false)==false or strlen($ccv)>4 or strlen($ccv)<3)
+				{
+					$error[]="Please enter your credit card security number.";
+				}
+			}
+		}
+				
+		if (count($error)==0)
+		{
+			if ( $cc_fields_required )
+			{
+				//check authorize.net
+				$country = "USA";
+				$orderid = 1;
+				
+				// ----------------------------------------------------------------------
+				// Quantity of registrations?  Always count the user
+				$final_count = 1;
+				
+				// Any other guests?
+				if (count($_POST["attendeefname"]) > 0)
+				{
+					$final_count += count($_POST["attendeefname"]);
+				}
+				
+				// The user and one guest are free with a promo code
+				if (trim($promo_code) === PROMO_CODE)
+				{
+					// Don't go below zero if the user registers without any guests
+					$final_count = max( 0, ($final_count - 2) );
+				}
+				
+				// And the total is ...
+				$total = $price * $final_count;
+				// ----------------------------------------------------------------------
+				
+				$fname = $_POST['first_name'];
+				$lname = $_POST['last_name'];
+				
+				include_once ("authorizenet.inc");
+			}
+		}
+		
+		if (count($error)==0)
+		{
+			//send email
+			$mailFrom="noreply@mnpork.com";	
+			$mailTo = "colleen@mnpork.com,pam@mnpork.com,accounting@mnpork.com";				
+			
+			// send email
+			$emailTitle="Registration from mnpork.com for Pork Congress ".esc_attr( get_option('pcr_year') );
+			$emailBody="";
+			$emailBody.="\n Registration Type: ".$attendee_type_list[$attendee_type];
+			$emailBody.="\n Name: $fullname";
+			$emailBody.="\n Title: $title";
+			$emailBody.="\n Company: $company";
+			$emailBody.="\n Address: $address";
+			$emailBody.="\n City: $city";
+			$emailBody.="\n State: $state";
+			$emailBody.="\n Zip: $zip";
+			$emailBody.="\n Phone: $phone";
+			$emailBody.="\n Fax: $fax";
+			$emailBody.="\n Email: $email";
+			$emailBody.="\n";
+			if ( $cc_fields_required == false )
+			{
+				$emailBody.="\n Promotional code: ".$promo_code;
+				$emailBody.="\n";
+			}
+			if ( is_array($_POST['attendeefname']) && count($_POST['attendeefname']) > 0 )
+			{
+				$emailBody.="\n Other Attendees";
+				foreach($_POST['attendeefname'] as $k=>$v)
+				{
+					$emailBody.="\n ".$k.": ".$v." ".esc_attr($_POST['attendeelname'][$k]);
+				}
+			}
+			
+			$thankyou="Thank you for your Pork Congress ".esc_attr( get_option('pcr_year') )." Registration. Here is a copy of the information you submitted. Your Pork Congress name badge will be mailed to you after ".esc_attr( get_option('pcr_early_date') ).".";
+			$thankyou.=" If you have questions prior to the event, please call the Minnesota Pork Board office at 1-800-537-7675 or e-mail colleen@mnpork.com.";
+									
+			$header ="From: ". $mailFrom;
+			mail($mailTo, "Registration from mnpork.com for Pork Congress ".esc_attr( get_option('pcr_year') ), $emailBody, $header);
+			
+			//send same email to user?
+			mail($email, "Registration from mnpork.com for Pork Congress ".esc_attr( get_option('pcr_year') ), $thankyou."\n\n".$emailBody, $header);
+			
+			// Send a separate email to the administrator saying new member(s) were added
+			if ( count($new_members) > 0 )
+			{
+				$lines = array();
+				$lines[] = "The following people have been added as members to the CRM as part of their Pork Congress registration:";
+				$lines[] = "";
+				foreach ($new_members as $fullname)
+				{
+					$lines[] = $fullname;
+				}
+				$lines[] = "";
+				$lines[] = "You can use the CRM website ( http://crm.mnpork.com/ ) to search for new members by name.";
+				
+				mail($mailTo, "CRM Update: New member(s) from Pork Congress ".esc_attr( get_option('pcr_year') )." registration", join("\n", $lines), $header);
+			}
+			
+			$hideform=1;
+			
+			//save to csv file
+			$filename="./porkcongress".esc_attr( get_option('pcr_year') ).".csv";
+			$handle=fopen($filename,"a");
+			
+			$line="\n";
+			$line.=$attendee_type_list[$attendee_type].",";
+			$line.=$fullname.",";
+			$line.=$title.",";
+			$line.=$company.",";
+			$line.=$address.",";
+			$line.=$city.",";
+			$line.=$state.",";
+			$line.=$zip.",";
+			$line.=$phone.",";
+			$line.=$fax.",";
+			$line.=$email.",";
+			$line.=$attendees.",";
+			if ( is_array($attendeefname) && count($attendeefname) > 0 )
+			{
+				foreach($attendeefname as $k=>$v)
+				{
+					$line.=$v." ".$attendeelname[$k].",";
+				}
+			}
+			fwrite($handle,$line);
+			fclose($handle);
+		}
+		
+		if ( count($error) == 0 )
+			$hideform = 1;
+		else
+			$registration_step = $_POST["registration_step"];
+	}
+	
+	if ( count($error) + count($success) > 0 )
+	{
+		foreach ($success as $k=>$v)
+		{
+?>
+<div class="success"><?php echo $v; ?></div>
+<?php
+		}
+		foreach ($error as $k=>$v)
+		{
+?>
+<div class="error"><?php echo $v; ?></div>
+<?php }
+?>
+<br />
+<?php }
+	
+	if ( $hideform == 0 )
+	{
+?>
+<style type="text/css">
+<!--
+.style2 {  color: #333366;
+  font-weight: bold;
+}
+-->
+</style>
+<form action="<?php echo 'https://'.$_SERVER['HTTP_HOST'].$_SERVER['REQUEST_URI']; ?>" method="post">
+<?php // Default step
+		if ( ! isset($_POST["registration_step"]) )
+		{
+			$registration_step = STEP_1;
+		}
+		
+		
+		// Display the appropriate visual form
+		switch ( $registration_step )
+		{
+			case STEP_1:
+?>
+  <table class="pork-congress-table pct-step1" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+		<td valign="middle" align="center">
+			<p align="center" class="style4" style="margin-top: 0; margin-bottom: 0">
+				To begin online registration, select the number of attendees (up to 20 per online registration form) or </p>
+				<p class="style2" style="margin-top: 0;"><a href="/wp-content/uploads/pc<?php echo esc_attr( get_option('pcr_year') ); ?>_reg_form.pdf" target="_blank"><strong>Mail In Registration Form</strong></a></p></td>
+	</tr>
+	<tr valign="top">
+		<td valign="middle">
+			<p class="pct-step1-attendees">
+				<span class="style15">
+					Select the Number of Attendees				</span>
+				<span class="style20">
+					<em>
+						<select name="attendees">
+							<option value="">-- Select One --</option>
+							<?php
+								for($i=1;$i<=20;$i++)
+								{
+									?>
+									<option value="<?php echo $i; ?>" <?php if ($attendees==$i){ echo "selected='selected'";} ?>><?php echo $i; ?></option>
+									<?php
+								}
+							?>
+						</select>
+					</em>				</span>			</p>
+			<p align="center" class="style15" style="margin-top: 0; margin-bottom: 0;">
+				<input type="hidden" name="registration_step" value="<?php print STEP_1; ?>" />
+				<input type="submit" name="submit" value="<?php echo $btnAttendees; ?>" />
+			</p>		</td>
+	</tr>
+</table>
+<?php break;
+			
+			case STEP_2:
+?>
+  <table class="pork-congress-table pct-step2" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+		<td colspan="3">
+			<p align="center" class="style15">
+				You have selected (<?php echo $attendees; ?>) registrations for the <?php echo esc_attr( get_option('pcr_year') ); ?> Pork Congress.
+				<br />
+				Please provide the first and last name of each attendee.			</p>		</td>
+	</tr>
+	<tr valign="top">
+		      <td colspan="3"><div class="style3 reg_section_header">Information for Pork Congress Admission Name Badges</div></td>
+    </tr>
+	<tr valign="top">
+		<td colspan="2">&nbsp;</td>
+		<td>
+			<div align="center" class="style15">
+				<span class="style13">
+					Cost Per Person $<?php echo $price; ?>				</span>			</div>		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+			<div align="left" class="style15">
+				<strong>Your Name</strong>
+			</div>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="263">
+			<span class="style10">
+				1 First Name:
+				<input type="text" name="first_name" value="<?php echo htmlentities($first_name); ?>" maxlength="20" />
+			</span>		</td>
+		<td width="197">
+			<span class="style10">
+				Last Name:
+				<input type="text" name="last_name" value="<?php echo htmlentities($last_name); ?>" maxlength="20" />
+			</span>		</td>
+		<td width="126" align="center">
+			$<?php echo $price; ?>		</td>
+	</tr>
+	<?php
+		if ( $attendees > 1 )
+		{
+?>
+	<tr valign="top">
+		<td colspan="3">
+			<div align="left" class="style15">
+				<strong>Other Attendees</strong>
+			</div>
+		</td>
+	</tr>
+<?php for($i=1;$i<=($attendees - 1);$i++)
+			{
+?>
+	<tr valign="top">
+		<td width="263">
+			<span class="style10">
+				<?php echo ($i + 1); ?> First Name:
+				<input type="text" name="attendeefname[<?php echo $i; ?>]" value="<?php echo htmlentities($attendeefname[$i]); ?>" maxlength="20" />
+			</span>		</td>
+		<td width="197">
+			<span class="style10">
+				Last Name:
+				<input type="text" name="attendeelname[<?php echo $i; ?>]" value="<?php echo htmlentities($attendeelname[$i]); ?>" maxlength="20" />
+			</span>		</td>
+		<td width="126" align="center">
+			$<?php echo $price; ?>		</td>
+	</tr>
+<?php
+			}
+		}
+?>
+	<tr valign="top">
+		<td>&nbsp;</td>
+		<td align="right"><span class="style19">TOTAL</span></td>
+		<td align="center"><span class="style19">$<?php echo sprintf("%.2f", $attendees * $price); ?></span></td>
+	</tr>
+	<tr>
+		<td colspan="3">
+			<p align="center" class="style15" style="margin-top: 0; margin-bottom: 0;">
+				<input type="hidden" name="attendees" value="<?php print $_POST["attendees"]; ?>" />
+				<input type="hidden" name="registration_step" value="<?php print STEP_2; ?>" />
+				<input type="submit" name="go_to_step_3" value="<?php print STEP_3; ?>" />
+			</p>
+		</td>
+	</tr>
+</table>
+<?php break;
+			
+			case STEP_3:
+				
+				if ( count($display_list) + count($other_display_list) > 0 )
+				{
+?>
+  <table class="pork-congress-table pct-step3" border="0" bgcolor="#F4E9CA" align="center">
+	<tr>
+		<td width="25%" nowrap="nowrap"><strong>Member Name</strong></td>
+		<td><strong>City</strong></td>
+	</tr>
+<?php if ( count($display_list) > 0 )
+					{
+						foreach ($display_list as $display_item)
+						{
+?>
+	<tr>
+		<td width="25%" nowrap="nowrap"><input type="radio" name="matching_personid" value="<?php print $display_item[0]; ?>"<?php if ( $_POST["matching_personid"] == $display_item[0] ) { ?> checked="checked"<?php } ?> />&nbsp;<?php print $display_item[1]; ?></td>
+		<td>&nbsp;<?php print $display_item[2]; ?></td>
+	</tr>
+<?php }
+					}
+					
+					// Do not offer to create a new contact if an existing one is found.
+					if(count($display_list) == 0) {
+?>
+	<tr>
+		<td width="25%" nowrap="nowrap"><input type="radio" name="matching_personid" value="-1"<?php if ( $_POST["matching_personid"] == -1 ) { ?> checked="checked"<?php } ?> />&nbsp;<?php print $_POST["first_name"]." ".$_POST["last_name"]; ?></td>
+		<td>&nbsp;New Contact</td>
+	</tr>
+<?php }
+					
+					$first_group = false;
+					if ( count($other_display_list) > 0 )
+					{
+						foreach ($other_display_list as $key => $other_list)
+						{
+							if ( $first_group )
+							{
+								$first_group = false;
+							}
+							else
+							{
+?>
+	<tr valign="top"><td colspan="2">&nbsp;</td></tr>
+<?php }
+							
+							foreach ($other_list as $display_item)
+							{
+?>
+	<tr>
+		<td width="25%" nowrap="nowrap"><input type="radio" name="matching_other_personid[<?php print $key; ?>]" value="<?php print $display_item[0]; ?>"<?php if ( $_POST["matching_other_personid[".$key."]"] == $display_item[0] ) { ?> checked="checked"<?php } ?> />&nbsp;<?php print $display_item[1]; ?></td>
+		<td>&nbsp;<?php print $display_item[2]; ?></td>
+	</tr>
+<?php }
+							
+							$is_checked = false;
+							if ( count($other_list) == 0 ) {
+								$is_checked = true;
+							}
+							if ( $_POST["matching_other_personid[".$key."]"] == -1 ) {
+								$is_checked = true;
+							}
+							
+							// Do not offer to create a new contact if an existing one is found.
+							if(count($other_list) == 0) {
+?>
+	<tr>
+		<td width="25%" nowrap="nowrap"><input type="radio" name="matching_other_personid[<?php print $key; ?>]" value="-1"<?php if ( $is_checked ) { ?> checked="checked"<?php } ?> />&nbsp;<?php print $_POST["attendeefname"][$key]." ".$_POST["attendeelname"][$key]; ?></td>
+		<td>&nbsp;New Contact</td>
+	</tr>
+<?php }
+						}
+					}
+?>
+	<tr>
+		<td colspan="2">
+			<p align="center" class="style15" style="margin-top: 0; margin-bottom: 0;">
+				<input type="hidden" name="registration_step" value="<?php print STEP_3; ?>" />
+				<input type="hidden" name="first_name" value="<?php echo htmlentities($_POST["first_name"]); ?>" />
+				<input type="hidden" name="last_name" value="<?php echo htmlentities($_POST["last_name"]); ?>" />
+<?php if ( count($_POST["attendeefname"]) > 0 )
+	{
+		foreach ($_POST["attendeefname"] as $key => $value)
+		{
+?>
+				<input type="hidden" name="attendeefname[<?php print $key; ?>]" value="<?php print $value; ?>" />
+				<input type="hidden" name="attendeelname[<?php print $key; ?>]" value="<?php print $_POST["attendeelname"][$key]; ?>" />
+<?php }
+	}
+?>
+				<input type="submit" name="go_to_step_4" value="<?php print STEP_4; ?>" />
+			</p>
+		</td>
+	</tr>
+</table>
+<?php break;
+				}
+				// break;
+				// NOTE!! The "break" command just above was moved within the if { ... } clause deliberately,
+				// since in the "else" case for that logic step it's the code of STEP_4 below we want, and
+				// a missing break command allows PHP to continue down to the next case
+			
+			case STEP_4:
+?>
+<div align="center">Please note: all fields marked with a red asterisk ( <span class="required">*</span> ) are required</div>
+<table class="pork-congress-table pct-step4a" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+		      <td colspan="3"><div class="style3 reg_section_header">Information for Pork Congress Admission Name Badges</div></td>
+    </tr>
+	<tr valign="top">
+		<td colspan="2">&nbsp;</td>
+		<td>
+			<div align="center" class="style15">
+				<span class="style13">Cost Per Person $<?php echo $price; ?></span>
+			</div>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="263">
+			<span class="style10">Name: <?php print htmlentities($_POST["first_name"]); ?> <?php print htmlentities($_POST["last_name"]); ?></span>
+		</td>
+		<td width="197">
+			<span class="style10"><?php if ( $_POST["matching_personid"] != -1 ) { ?><!-- (existing listing) --><?php } else { ?><!-- (adding new listing) --><?php } ?></span>
+		</td>
+		<td width="126" align="center">
+			$<?php echo $price; ?>		</td>
+	</tr>
+	<?php
+		if ( count($_POST["attendeefname"]) > 0 )
+		{
+			foreach ($_POST["attendeefname"] as $key => $attendee_first_name)
+			{
+				$attendee_last_name = $_POST["attendeelname"][$key];
+?>
+	<tr valign="top">
+		<td width="263">
+			<span class="style10">Name: <?php print htmlentities($attendee_first_name); ?> <?php print htmlentities($attendee_last_name); ?></span>
+		</td>
+		<td width="197">
+			<span class="style10"><?php if ( $_POST["matching_other_personid"][$key] != -1 ) { ?><!-- (existing listing) --><?php } else { ?><!-- (adding new listing) --><?php } ?></span>
+		</td>
+		<td width="126" align="center">
+			$<?php echo $price; ?>		</td>
+	</tr>
+<?php
+			}
+		}
+?>
+	<tr valign="top">
+		<td>&nbsp;</td>
+		<td align="right"><span class="style19">TOTAL</span></td>
+		<td align="center"><span class="style19">$<?php echo sprintf("%.2f", (1 + count($_POST["attendeefname"])) * $price); ?></span></td>
+	</tr>
+</table>
+<?php
+/*
+  <table class="pork-congress-table pct-step4a" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+		<td>
+			<span class="style15">
+				Organization or Company Name for Badge (optional):
+				<input type="text" name="organization" value="<?php echo htmlentities($organization); ?>" size="40" />
+			</span>
+		</td>
+	</tr>
+  </table>
+*/
+?>
+<br />
+  <table class="pork-congress-table pct-step4b" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+	  <td colspan="2" align="right"><div align="left" class="style3 reg_section_header">Mailing Address for Admission Badges</div></td>
+
+	</tr>
+	<tr valign="top">
+		<td width="200" align="right">
+				<span class="required">*</span> <strong>Select Registration Type:</strong> 
+		</td>
+		<td>
+			<select name="attendee_type">
+				<option value="">-- Select One --</option>
+				<option value="Attendee" <?php if ($_POST['attendee_type'] == "Attendee") { ?> selected="selected"<?php } ?>>Attendee</option>
+				<option value="SIP/Partner" <?php if ($_POST['attendee_type'] == "SIP/Partner") { ?> selected="selected"<?php } ?>>SIP/Partner</option>
+			</select>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="155" align="right">
+				<span class="required">*</span> Your Name: 
+		</td>
+		<td>
+			<input type="text" name="fullname" value="<?php echo htmlentities($fullname); ?>" size="40" />
+		</td>
+	</tr>
+	<tr valign="top">
+		<td align="right">Title (optional): </td>
+
+    <td><input type="text" name="title" value="<?php echo htmlentities($title); ?>" size="40" /></td>
+  </tr>
+  <tr valign="top">
+    <td align="right">Company (optional): </td>
+    <td><input type="text" name="company" value="<?php echo htmlentities($company); ?>" size="40" /></td>
+  </tr>
+  <tr valign="top">
+    <td align="right"><span class="required">*</span> Address:</td>
+    <td>
+		<input type="text" name="address" value="<?php echo htmlentities($address); ?>" size="40" /><br />
+		<span class="instructions"><em>Please enter your credit card billing address.</em></span>
+	</td>
+  </tr>
+  <tr valign="top">
+    <td align="right"><span class="required">*</span> City:</td>
+    <td><input type="text" name="city" value="<?php echo htmlentities($city); ?>" size="40" /></td>
+  </tr>
+  <tr valign="top">
+    <td align="right"><span class="required">*</span> State:</td>
+
+    <td><?php vw_show_state_list($state); ?></td>
+  </tr>
+  <tr valign="top">
+    <td align="right"><span class="required">*</span> Zip:</td>
+    <td><input type="text" name="zip" value="<?php echo htmlentities($zip); ?>" size="40" /></td>
+  </tr>
+  <tr valign="top">
+    <td align="right">
+		<span class="required">*</span> Phone:
+		<br />
+		<span class="instructions">
+			xxx-xxx-xxxx
+		</span>
+	</td>
+
+    <td><input type="text" name="phone" value="<?php echo htmlentities($phone); ?>" size="40" /></td>
+  </tr>
+  <tr valign="top">
+    <td align="right">
+		Fax: (optional)
+		<br />
+		<span class="instructions">
+			xxx-xxx-xxxx
+		</span>
+	</td>
+    <td><input type="text" name="fax" value="<?php echo htmlentities($fax); ?>" size="40" /></td>
+  </tr>
+  <tr valign="top">
+    <td align="right"><span class="required">*</span> E-mail:</td>
+
+    <td><input type="text" name="email" value="<?php echo htmlentities($email); ?>" size="40" /></td>
+  </tr>
+</table>
+<br />
+  <table class="pork-congress-table pct-step4c" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+		<td colspan="3">
+	  <div class="style3 reg_section_header">Credit Card Information</div> </td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+			<div align="center">
+				<span class="style10">
+					<b>MPPA members <em>(SIP and Partners)</em>:</b> Enter the promotional code that you received by email or mail and you and one guest will receive complimentary admission to Pork Congress.
+					If using the promotional code, do not enter any credit card information.
+				</span>
+			</div>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+			<span class="style10">
+				Promotional Code:
+			</span>
+			<input type="text" name="promo_code" value="<?php echo htmlentities($_POST['promo_code']); ?>" />
+		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+				<span class="style10">
+					Card Type:
+				</span>
+			<span class="style17">
+				<select name="cctype">
+					<option value="">-- Select One --</option>
+					<option value="Visa" <?php if ($_POST['cctype'] == "Visa") { echo "selected='selected'";} ?>>Visa</option>
+					<option value="MasterCard" <?php if ($_POST['cctype'] == "MasterCard") { echo "selected='selected'";} ?>>MasterCard</option>
+				</select>
+			</span>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+				<span class="style10">
+					Card Number:
+				</span>
+			<input type="text" name="ccnumber" value="<?php echo htmlentities($_POST['ccnumber']); ?>" />
+		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+				<span class="style10">
+					Expires:
+				</span>
+			<input type="text" name="ccexpiration" value="<?php echo htmlentities($_POST['ccexpiration']); ?>" maxlength="8" size="8" />
+			<span class="instructions"><em>Please enter in the mm/yyyy format</em></span>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+			<span class="style10">
+				Name on Card:
+				<input type="text" name="ccname" value="<?php echo htmlentities($_POST['ccname']); ?>" />
+			</span>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td colspan="3">
+			<span class="style10">
+				Security Code (3 digit code on back of card):
+				<input type="text" name="ccv" value="<?php echo htmlentities($_POST['ccv']); ?>" />
+			</span>
+		</td>
+	</tr>
+</table>
+<br />
+  <table class="pork-congress-table pct-step4d" border="0" bgcolor="#F4E9CA" align="center">
+	<tr valign="top">
+		<td width="300" height="23" valign="middle" align="right" >
+
+				<input type="hidden" name="registration_step" value="<?php print STEP_4; ?>" />
+				<input type="hidden" name="matching_personid" value="<?php print $_POST["matching_personid"]; ?>" />
+				<input type="hidden" name="first_name" value="<?php echo htmlentities($_POST["first_name"]); ?>" />
+				<input type="hidden" name="last_name" value="<?php echo htmlentities($_POST["last_name"]); ?>" />
+<?php if ( count($_POST["matching_other_personid"]) > 0 )
+	{
+		foreach ($_POST["matching_other_personid"] as $key => $value)
+		{
+?>
+				<input type="hidden" name="matching_other_personid[<?php print $key; ?>]" value="<?php print $_POST["matching_other_personid"][$key]; ?>" />
+<?php }
+	}
+	if ( count($_POST["attendeefname"]) > 0 )
+	{
+		foreach ($_POST["attendeefname"] as $key => $value)
+		{
+?>
+				<input type="hidden" name="attendeefname[<?php print $key; ?>]" value="<?php print $value; ?>" />
+				<input type="hidden" name="attendeelname[<?php print $key; ?>]" value="<?php print $_POST["attendeelname"][$key]; ?>" />
+<?php }
+	}
+?>
+				<input type="submit" name="submit" value="<?php echo $btnSubmit; ?>" />
+				</td>
+		<td width="290" valign="middle">
+			<div align="left">
+				<span class="style4">
+					<input type="submit" name="cancel" value="Cancel" />
+				</span>			</div>		</td>
+	</tr>
+	<tr valign="top">
+	  <td height="23" colspan="2" valign="middle" align="center">
+		Remember... Advanced registration ends <?php echo esc_attr( get_option('pcr_early_date') ); ?><br />
+		Your Pork Congress name badge will be mailed to you after <?php echo esc_attr( get_option('pcr_early_date') ); ?>.<br />
+		<br />
+	  </td>
+    </tr>
+</table>
+<?php break;
+			
+			default: break;
+		}
+?>
+<br />
+</form>
+<?php
+	}
+	else
+	{
+?>
+<br />
+<table class="pork-congress-table pct-step5" cellspacing="0" cellpadding="1" border="0">
+	<tr valign="top">
+		<td>
+			<p>Thank you for your Pork Congress registration. Here is a copy of the information you submitted.<br />
+			A confirmation email will be sent to you as well. Your Pork Congress name badge will be mailed to you after <?php echo esc_attr( get_option('pcr_early_date') ); ?>.</p>
+		</td>
+	</tr>
+</table>
+<div align="center">
+	<div style="text-align:left">
+		<?php
+			echo str_replace("\n","<br />",$emailBody);
+		?>
+	</div>
+</div>
+<?php
+	}
+?>
